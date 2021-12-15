@@ -27,7 +27,7 @@ namespace MusicLibraryAPI.Controllers
 
 
         [HttpPut("albums")]
-        public ActionResult AddLikedAlbum([FromQuery] string username, [FromQuery] string albumName, [FromQuery] string artistName)
+        public ActionResult AddLikedAlbum([FromQuery] string username, [FromQuery] int albumId)
         {
             return Ok("add some albums");
         }
@@ -39,10 +39,23 @@ namespace MusicLibraryAPI.Controllers
         }
 
 
-        [HttpPut("albums")]
-        public ActionResult AddLikedAlbum([FromQuery] string username, [FromQuery] string albumName, [FromQuery] string artistName)
+        [HttpPut("songs")]
+        public ActionResult AddLikedSongs([FromQuery] string username, [FromQuery] int songId)
         {
-            return Ok("add some albums");
+            return Ok("add some songs");
+        }
+
+        [HttpGet("artists")]
+        public ActionResult GetLikedArtists([FromQuery] string username)
+        {
+            return Ok("return some artists");
+        }
+
+
+        [HttpPut("artists")]
+        public ActionResult AddLikedArtist([FromQuery] string username, [FromQuery] int artistId)
+        {
+            return Ok("add some artists");
         }
     }
 }
