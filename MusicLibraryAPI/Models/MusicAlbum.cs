@@ -7,6 +7,6 @@ namespace MusicLibraryAPI.Models
         public int Id { get; set; }
         public string AlbumName { get; set; }
         public int ArtistId { get; set; }
-        public List<int> SongIds { get; set; }
+        public List<MusicSong> Songs { get; set; }
     }
 }

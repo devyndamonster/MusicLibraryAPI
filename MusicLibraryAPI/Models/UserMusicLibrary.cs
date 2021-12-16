@@ -6,9 +6,9 @@ namespace MusicLibraryAPI.Models
     {
 
         public string UserName { get; set; }
-        public List<int> LikedAlbumIds { get; set; }
         public List<int> LikedArtistIds { get; set; }
-        public List<int> LikedSongIds { get; set; }
+        public List<MusicAlbum> LikedAlbums { get; set; }
+        public List<MusicSong> LikedSongs { get; set; }
         public List<UserMusicPlaylist> Playlists { get; set; }
            
 
