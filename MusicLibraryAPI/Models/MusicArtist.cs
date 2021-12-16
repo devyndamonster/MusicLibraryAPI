@@ -6,9 +6,9 @@ namespace MusicLibraryAPI.Models
     public class MusicArtist
     {
         [JsonProperty(PropertyName = "id")]
-        public int Id { get; set; }
+        public string Id { get; set; }
 
-        [JsonProperty(PropertyName = "artistName")]
+        [JsonProperty(PropertyName = "name")]
         public string ArtistName { get; set; }
 
         [JsonProperty(PropertyName = "albums")]

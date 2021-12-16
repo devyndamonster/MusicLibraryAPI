@@ -1,12 +1,25 @@
-﻿namespace MusicLibraryAPI.Models
+﻿using Newtonsoft.Json;
+
+namespace MusicLibraryAPI.Models
 {
     public class MusicSong
     {
-        public int Id { get; set; }
+        [JsonProperty(PropertyName = "id")]
+        public string Id { get; set; }
+
+        [JsonProperty(PropertyName = "name")]
         public string SongName { get; set; }
-        public int ArtistId { get; set; }
+
+        [JsonProperty(PropertyName = "artistId")]
+        public string ArtistId { get; set; }
+
+        [JsonProperty(PropertyName = "artistName")]
         public string ArtistName { get; set; }
-        public int AlbumId { get; set; }
+
+        [JsonProperty(PropertyName = "albumId")]
+        public string AlbumId { get; set; }
+
+        [JsonProperty(PropertyName = "albumName")]
         public string AlbumName { get; set; }
     }
 }
