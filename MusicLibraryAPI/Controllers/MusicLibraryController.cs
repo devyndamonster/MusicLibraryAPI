@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
+using MusicLibraryAPI.Services;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -11,11 +12,11 @@ namespace MusicLibraryAPI.Controllers
     [Route("musicapi")]
     public class MusicLibraryController : ControllerBase
     {
-        private readonly ILogger<MusicLibraryController> _logger;
+        private readonly ICosmosDbService _cosmosDbService;
 
-        public MusicLibraryController(ILogger<MusicLibraryController> logger)
+        public MusicLibraryController(ICosmosDbService cosmosDbService)
         {
-            _logger = logger;
+            _cosmosDbService = cosmosDbService;
         }
 
 
@@ -27,7 +28,7 @@ namespace MusicLibraryAPI.Controllers
 
 
         [HttpPut("albums")]
-        public ActionResult AddLikedAlbum([FromQuery] string username, [FromQuery] int albumId)
+        public ActionResult AddLikedAlbum([FromQuery] string username, [FromQuery] int artistId, [FromQuery] int albumId)
         {
             return Ok("add some albums");
         }
@@ -40,7 +41,7 @@ namespace MusicLibraryAPI.Controllers
 
 
         [HttpPut("songs")]
-        public ActionResult AddLikedSongs([FromQuery] string username, [FromQuery] int songId)
+        public ActionResult AddLikedSongs([FromQuery] string username, [FromQuery] int artistId, [FromQuery] int albumId, [FromQuery] int songId)
         {
             return Ok("add some songs");
         }

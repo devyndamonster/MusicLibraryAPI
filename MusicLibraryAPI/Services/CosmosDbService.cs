@@ -11,6 +11,12 @@ namespace MusicLibraryAPI.Services
         private Container _userContainer;
         private Container _artistContainer;
 
+        public CosmosDbService(CosmosClient client, string dbName, string userContainerName, string artistContainerName)
+        {
+            _userContainer = client.GetContainer(dbName, userContainerName);
+            _artistContainer = client.GetContainer(dbName, artistContainerName);
+        }
+
         public Task<MusicArtist> GetArtist(int id)
         {
             throw new System.NotImplementedException();
