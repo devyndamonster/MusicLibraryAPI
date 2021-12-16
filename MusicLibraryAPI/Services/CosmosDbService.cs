@@ -1,5 +1,6 @@
 ﻿using Bogus;
 using Microsoft.Azure.Cosmos;
+using Microsoft.Azure.Cosmos.Linq;
 using MusicLibraryAPI.Models;
 using System;
 using System.Collections.Generic;
@@ -20,12 +21,23 @@ namespace MusicLibraryAPI.Services
             _userContainer = client.GetContainer(dbName, userContainerName);
             _artistContainer = client.GetContainer(dbName, artistContainerName);
 
-            SeedArtistContainerIfEmpty(_artistContainer, 20);
+            //Try and seed the database if it is empty
+            //This is done in a "fire and forget" way
+            Task.Run(async () => await SeedArtistContainerIfEmpty(_artistContainer, 20));
         }
 
-        public async Task<MusicArtist> GetArtist(int id)
+        public async Task<MusicArtist> GetArtist(string id)
         {
-            throw new System.NotImplementedException();
+            try
+            {
+                ItemResponse<MusicArtist> response = await _artistContainer.ReadItemAsync<MusicArtist>(id, new PartitionKey(id));
+                return response.Resource;
+            }
+            catch(CosmosException e)
+            {
+                Console.WriteLine(e.Message);
+                return null;
+            }
         }
 
         public async Task<UserMusicLibrary> GetUserLibrary(string username)
@@ -33,7 +45,7 @@ namespace MusicLibraryAPI.Services
             throw new System.NotImplementedException();
         }
 
-        public async Task UpdateArtist(int id, MusicArtist artist)
+        public async Task UpdateArtist(string id, MusicArtist artist)
         {
             throw new System.NotImplementedException();
         }
@@ -45,7 +57,8 @@ namespace MusicLibraryAPI.Services
 
         public async Task AddArtist(MusicArtist artist)
         {
-            throw new System.NotImplementedException();
+            Console.WriteLine($"Adding Artist: {artist.ArtistName}");
+            await _artistContainer.CreateItemAsync<MusicArtist>(artist, new PartitionKey(artist.Id));
         }
 
 
@@ -53,17 +66,24 @@ namespace MusicLibraryAPI.Services
         /// Generates a given number of music artists and adds them to the database
         /// </summary>
         /// <param name="artistContainer">The number of fake artists to generate</param>
-        private void SeedArtistContainerIfEmpty(Container artistContainer, int numArtists)
+        private async Task SeedArtistContainerIfEmpty(Container artistContainer, int numArtists)
         {
-            int artistCount = artistContainer.GetItemLinqQueryable<MusicArtist>().Count();
+
+            //Get the number of artists in the DB asyncrounously
+            //Based on an example found here: https://stackoverflow.com/questions/57516869/how-to-do-run-linq-count-on-a-cosmos-db-query-asynchronously-on-sdk-v3
+            IOrderedQueryable<MusicArtist> linqQueryable = artistContainer.GetItemLinqQueryable<MusicArtist>();
+            int artistCount = await linqQueryable.CountAsync();
+
             if (artistCount > 0) return;
+
+            Console.WriteLine("Seeding Artist DB");
 
             string[] bandStrings = { "Horse", "Tablet", "Fire", "Wire", "Pencil", "Car", "TV", "Paper", "Headphones", "Water", "Bottle", "Metal", "Cup", "Mug", "Picture" };
             string[] albumStrings = { "Orange", "Blue", "Red", "Green", "Outside", "Inside", "Hard", "Soft", "Hot", "Cold", "Angry", "Sad", "Happy" };
 
             var randomArtist = new Faker<MusicArtist>()
                 .RuleFor(s => s.Id, f => Guid.NewGuid().ToString())
-                .RuleFor(s => s.ArtistName, f => f.Name + " and the " + f.PickRandom(bandStrings))
+                .RuleFor(s => s.ArtistName, f => f.Name.FirstName() + " and the " + f.PickRandom(bandStrings))
                 .FinishWith((artistFaker, artist) =>
                 {
                     var randomAlbum = new Faker<MusicAlbum>()
@@ -74,7 +94,7 @@ namespace MusicLibraryAPI.Services
 
                             var randomSong = new Faker<MusicSong>()
                                 .RuleFor(s => s.Id, f => Guid.NewGuid().ToString())
-                                .RuleFor(s => s.SongName, f => "A song for " + f.Name)
+                                .RuleFor(s => s.SongName, f => "A song for " + f.Name.FirstName())
                                 .RuleFor(s => s.AlbumId, f => album.Id)
                                 .RuleFor(s => s.AlbumName, f => album.AlbumName)
                                 .RuleFor(s => s.ArtistId, f => artist.Id)
@@ -90,11 +110,12 @@ namespace MusicLibraryAPI.Services
             List<MusicArtist> artists = randomArtist.Generate(numArtists);
 
             //For each generated artist, add it to the cosmos db container
-            //This calls async tasks in a blocking fashion, but that's okay since this only runs once on an empty db
             foreach(MusicArtist artist in artists)
             {
-                Task.Run(() => AddArtist(artist)).Wait();
+                await AddArtist(artist);
             }
+
+            Console.WriteLine("Seeding Complete!");
         }
     }
 }
