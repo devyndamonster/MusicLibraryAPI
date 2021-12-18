@@ -40,9 +40,46 @@ namespace MusicLibraryAPI.Services
             }
         }
 
-        public async Task<UserMusicLibrary> GetUserLibrary(string username)
+
+        /// <summary>
+        /// Queries the Artist Container for music artists, sorted by their Id, and returns a list of size count artists starting at startIndex
+        /// </summary>
+        /// <param name="startIndex">The index of the first artist to be returned from the sorted database</param>
+        /// <param name="count">Number of artists returned. Size of list may be less if count is larger than number of artists after startIndex</param>
+        /// <returns>A list of artists</returns>
+        public async Task<List<MusicArtist>> GetArtists(int startIndex, int count)
         {
-            throw new System.NotImplementedException();
+            try
+            {
+                List<MusicArtist> artists = new List<MusicArtist>();
+
+                //This is how you query cosmosDB asyncronously with LINQ according to the docs
+                //https://docs.microsoft.com/en-us/dotnet/api/microsoft.azure.cosmos.container.getitemlinqqueryable?view=azure-dotnet
+
+                //We orderby the Id because that is the pertition key, and ordering by name may be expensive
+                using (FeedIterator<MusicArtist> setIterator = _artistContainer.GetItemLinqQueryable<MusicArtist>()
+                    .OrderBy(x => x.Id)
+                    .Skip(startIndex)
+                    .Take(count)
+                    .ToFeedIterator())
+                {
+                    while (setIterator.HasMoreResults)
+                    {
+                        foreach (MusicArtist artist in await setIterator.ReadNextAsync())
+                        {
+                            artists.Add(artist);
+                        }
+                    }
+                }
+
+                return artists;
+            }
+
+            catch (CosmosException e)
+            {
+                Console.WriteLine(e.Message);
+                return new List<MusicArtist>();
+            }
         }
 
         public async Task UpdateArtist(string id, MusicArtist artist)
@@ -50,16 +87,121 @@ namespace MusicLibraryAPI.Services
             throw new System.NotImplementedException();
         }
 
-        public async Task UpdateUserLibrary(string username, UserMusicLibrary library)
-        {
-            throw new System.NotImplementedException();
-        }
-
         public async Task AddArtist(MusicArtist artist)
         {
-            Console.WriteLine($"Adding Artist: {artist.ArtistName}");
-            await _artistContainer.CreateItemAsync<MusicArtist>(artist, new PartitionKey(artist.Id));
+            await _artistContainer.CreateItemAsync(artist, new PartitionKey(artist.Id));
         }
+
+
+
+        public async Task<UserMusicLibrary> CreateUserLibrary(string username)
+        {
+            try
+            {
+                UserMusicLibrary library = new UserMusicLibrary(username);
+
+                ItemResponse<UserMusicLibrary> result = await _userContainer.CreateItemAsync(library, new PartitionKey(library.UserName));
+                return result.Resource;
+            }
+            catch (CosmosException e)
+            {
+                Console.WriteLine(e.Message);
+                return null;
+            }
+        }
+
+        public async Task<UserMusicLibrary> GetUserLibrary(string username)
+        {
+            try
+            {
+                ItemResponse<UserMusicLibrary> result = await _userContainer.ReadItemAsync<UserMusicLibrary>(username, new PartitionKey(username));
+                return result.Resource;
+            }
+            catch (CosmosException e)
+            {
+                Console.WriteLine(e.Message);
+                return null;
+            }
+        }
+
+
+        public async Task<UserMusicLibrary> AddLikedArtist(string username, string artistId)
+        {
+            try
+            {
+                UserMusicLibrary library = await GetUserLibrary(username);
+
+                if (!library.LikedArtistIds.Contains(artistId))
+                {
+                    library.LikedArtistIds.Add(artistId);
+                    ItemResponse<UserMusicLibrary> result = await _userContainer.UpsertItemAsync(library, new PartitionKey(library.UserName));
+                    return result.Resource;
+                }
+
+                else
+                {
+                    return library;
+                }
+            }
+            catch (CosmosException e)
+            {
+                Console.WriteLine(e.Message);
+                return null;
+            }
+        }
+
+
+        public async Task<UserMusicLibrary> AddLikedAlbum(string username, MusicAlbum album)
+        {
+            try
+            {
+                UserMusicLibrary library = await GetUserLibrary(username);
+
+                if (!library.LikedAlbums.Any(o => o.Id == album.Id))
+                {
+                    library.LikedAlbums.Add(album);
+                    ItemResponse<UserMusicLibrary> result = await _userContainer.UpsertItemAsync(library, new PartitionKey(library.UserName));
+                    return result.Resource;
+                }
+
+                else
+                {
+                    return library;
+                }
+            }
+            catch (CosmosException e)
+            {
+                Console.WriteLine(e.Message);
+                return null;
+            }
+        }
+
+
+        public async Task<UserMusicLibrary> AddLikedSong(string username, MusicSong song)
+        {
+            try
+            {
+                UserMusicLibrary library = await GetUserLibrary(username);
+
+                if (!library.LikedAlbums.Any(o => o.Id == song.Id))
+                {
+                    library.LikedSongs.Add(song);
+                    ItemResponse<UserMusicLibrary> result = await _userContainer.UpsertItemAsync(library, new PartitionKey(library.UserName));
+                    return result.Resource;
+                }
+
+                else
+                {
+                    return library;
+                }
+            }
+            catch (CosmosException e)
+            {
+                Console.WriteLine(e.Message);
+                return null;
+            }
+        }
+
 
 
         /// <summary>
@@ -117,5 +259,7 @@ namespace MusicLibraryAPI.Services
 
             Console.WriteLine("Seeding Complete!");
         }
+
+        
     }
 }
