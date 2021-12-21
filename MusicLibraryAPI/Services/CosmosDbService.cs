@@ -28,16 +28,8 @@ namespace MusicLibraryAPI.Services
 
         public async Task<MusicArtist> GetArtist(string id)
         {
-            try
-            {
-                ItemResponse<MusicArtist> response = await _artistContainer.ReadItemAsync<MusicArtist>(id, new PartitionKey(id));
-                return response.Resource;
-            }
-            catch(CosmosException e)
-            {
-                Console.WriteLine(e.Message);
-                return null;
-            }
+            ItemResponse<MusicArtist> response = await _artistContainer.ReadItemAsync<MusicArtist>(id, new PartitionKey(id));
+            return response.Resource;
         }
 
 
@@ -49,37 +41,28 @@ namespace MusicLibraryAPI.Services
         /// <returns>A list of artists</returns>
         public async Task<List<MusicArtist>> GetArtists(int startIndex, int count)
         {
-            try
+            List<MusicArtist> artists = new List<MusicArtist>();
+
+            //This is how you query cosmosDB asyncronously with LINQ according to the docs
+            //https://docs.microsoft.com/en-us/dotnet/api/microsoft.azure.cosmos.container.getitemlinqqueryable?view=azure-dotnet
+
+            //We orderby the Id because that is the pertition key, and ordering by name may be expensive
+            using (FeedIterator<MusicArtist> setIterator = _artistContainer.GetItemLinqQueryable<MusicArtist>()
+                .OrderBy(x => x.Id)
+                .Skip(startIndex)
+                .Take(count)
+                .ToFeedIterator())
             {
-                List<MusicArtist> artists = new List<MusicArtist>();
-
-                //This is how you query cosmosDB asyncronously with LINQ according to the docs
-                //https://docs.microsoft.com/en-us/dotnet/api/microsoft.azure.cosmos.container.getitemlinqqueryable?view=azure-dotnet
-
-                //We orderby the Id because that is the pertition key, and ordering by name may be expensive
-                using (FeedIterator<MusicArtist> setIterator = _artistContainer.GetItemLinqQueryable<MusicArtist>()
-                    .OrderBy(x => x.Id)
-                    .Skip(startIndex)
-                    .Take(count)
-                    .ToFeedIterator())
+                while (setIterator.HasMoreResults)
                 {
-                    while (setIterator.HasMoreResults)
+                    foreach (MusicArtist artist in await setIterator.ReadNextAsync())
                     {
-                        foreach (MusicArtist artist in await setIterator.ReadNextAsync())
-                        {
-                            artists.Add(artist);
-                        }
+                        artists.Add(artist);
                     }
                 }
-
-                return artists;
             }
 
-            catch (CosmosException e)
-            {
-                Console.WriteLine(e.Message);
-                return new List<MusicArtist>();
-            }
+            return artists;
         }
 
         public async Task UpdateArtist(string id, MusicArtist artist)
@@ -96,109 +79,137 @@ namespace MusicLibraryAPI.Services
 
         public async Task<UserMusicLibrary> CreateUserLibrary(string username)
         {
-            try
-            {
-                UserMusicLibrary library = new UserMusicLibrary(username);
+            UserMusicLibrary library = new UserMusicLibrary(username);
 
-                ItemResponse<UserMusicLibrary> result = await _userContainer.CreateItemAsync(library, new PartitionKey(library.UserName));
-                return result.Resource;
-            }
-            catch (CosmosException e)
-            {
-                Console.WriteLine(e.Message);
-                return null;
-            }
+            ItemResponse<UserMusicLibrary> result = await _userContainer.CreateItemAsync(library, new PartitionKey(library.UserName));
+            return result.Resource;
         }
 
         public async Task<UserMusicLibrary> GetUserLibrary(string username)
         {
-            try
+            using (FeedIterator<UserMusicLibrary> setIterator = _userContainer.GetItemLinqQueryable<UserMusicLibrary>()
+            .Where(o => o.UserName == username)
+            .ToFeedIterator())
             {
-                ItemResponse<UserMusicLibrary> result = await _userContainer.ReadItemAsync<UserMusicLibrary>(username, new PartitionKey(username));
-                return result.Resource;
+                while (setIterator.HasMoreResults)
+                {
+                    foreach (UserMusicLibrary library in await setIterator.ReadNextAsync())
+                    {
+                        return library;
+                    }
+                }
             }
-            catch (CosmosException e)
-            {
-                Console.WriteLine(e.Message);
-                return null;
-            }
+
+            return null;
         }
 
 
         public async Task<UserMusicLibrary> AddLikedArtist(string username, string artistId)
         {
-            try
+            UserMusicLibrary library = await GetUserLibrary(username);
+
+            if (!library.LikedArtistIds.Contains(artistId))
             {
-                UserMusicLibrary library = await GetUserLibrary(username);
-
-                if (!library.LikedArtistIds.Contains(artistId))
-                {
-                    library.LikedArtistIds.Add(artistId);
-                    ItemResponse<UserMusicLibrary> result = await _userContainer.UpsertItemAsync(library, new PartitionKey(library.UserName));
-                    return result.Resource;
-                }
-
-                else
-                {
-                    return library;
-                }
+                library.LikedArtistIds.Add(artistId);
+                ItemResponse<UserMusicLibrary> result = await _userContainer.UpsertItemAsync(library, new PartitionKey(library.UserName));
+                return result.Resource;
             }
-            catch (CosmosException e)
+
+            else
             {
-                Console.WriteLine(e.Message);
-                return null;
+                return library;
             }
         }
+
+
+        public async Task<UserMusicLibrary> RemoveLikedArtist(string username, string artistId)
+        {
+            UserMusicLibrary library = await GetUserLibrary(username);
+
+            if (library.LikedArtistIds.Contains(artistId))
+            {
+                library.LikedArtistIds.Remove(artistId);
+                ItemResponse<UserMusicLibrary> result = await _userContainer.UpsertItemAsync(library, new PartitionKey(library.UserName));
+                return result.Resource;
+            }
+
+            else
+            {
+                return library;
+            }
+        }
+
 
 
         public async Task<UserMusicLibrary> AddLikedAlbum(string username, MusicAlbum album)
         {
-            try
+            UserMusicLibrary library = await GetUserLibrary(username);
+
+            if (!library.LikedAlbums.Any(o => o.Id == album.Id))
             {
-                UserMusicLibrary library = await GetUserLibrary(username);
-
-                if (!library.LikedAlbums.Any(o => o.Id == album.Id))
-                {
-                    library.LikedAlbums.Add(album);
-                    ItemResponse<UserMusicLibrary> result = await _userContainer.UpsertItemAsync(library, new PartitionKey(library.UserName));
-                    return result.Resource;
-                }
-
-                else
-                {
-                    return library;
-                }
+                library.LikedAlbums.Add(album);
+                ItemResponse<UserMusicLibrary> result = await _userContainer.UpsertItemAsync(library, new PartitionKey(library.UserName));
+                return result.Resource;
             }
-            catch (CosmosException e)
+
+            else
             {
-                Console.WriteLine(e.Message);
-                return null;
+                return library;
             }
         }
 
 
+        public async Task<UserMusicLibrary> RemoveLikedAlbum(string username, string albumId)
+        {
+            UserMusicLibrary library = await GetUserLibrary(username);
+
+            if (library.LikedAlbums.Any(o => o.Id == albumId))
+            {
+                library.LikedAlbums.RemoveAll(o => o.Id == albumId);
+                ItemResponse<UserMusicLibrary> result = await _userContainer.UpsertItemAsync(library, new PartitionKey(library.UserName));
+                return result.Resource;
+            }
+
+            else
+            {
+                return library;
+            }
+        }
+
+
+
         public async Task<UserMusicLibrary> AddLikedSong(string username, MusicSong song)
         {
-            try
+            UserMusicLibrary library = await GetUserLibrary(username);
+
+            if (!library.LikedAlbums.Any(o => o.Id == song.Id))
             {
-                UserMusicLibrary library = await GetUserLibrary(username);
-
-                if (!library.LikedAlbums.Any(o => o.Id == song.Id))
-                {
-                    library.LikedSongs.Add(song);
-                    ItemResponse<UserMusicLibrary> result = await _userContainer.UpsertItemAsync(library, new PartitionKey(library.UserName));
-                    return result.Resource;
-                }
-
-                else
-                {
-                    return library;
-                }
+                library.LikedSongs.Add(song);
+                ItemResponse<UserMusicLibrary> result = await _userContainer.UpsertItemAsync(library, new PartitionKey(library.UserName));
+                return result.Resource;
             }
-            catch (CosmosException e)
+
+            else
             {
-                Console.WriteLine(e.Message);
-                return null;
+                return library;
+            }
+        }
+
+
+        public async Task<UserMusicLibrary> RemoveLikedSong(string username, string songId)
+        {
+            UserMusicLibrary library = await GetUserLibrary(username);
+
+            if (library.LikedSongs.Any(o => o.Id == songId))
+            {
+                library.LikedSongs.RemoveAll(o => o.Id == songId);
+                ItemResponse<UserMusicLibrary> result = await _userContainer.UpsertItemAsync(library, new PartitionKey(library.UserName));
+                return result.Resource;
+            }
+
+            else
+            {
+                return library;
             }
         }
 
